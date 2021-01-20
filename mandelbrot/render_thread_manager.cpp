@@ -117,7 +117,6 @@ void render_thread_manager::do_work(unsigned char* data, int y1, int y2, QSize s
 QColor render_thread_manager::value(QPointF const& p)
 {
     std::complex<double> c(p.x(), p.y());
-    size_t const MAX_STEPS = 200;
     std::complex<double> z = 0;
     for (size_t step = 0;; ++step)
     {
@@ -132,7 +131,7 @@ QColor render_thread_manager::value(QPointF const& p)
                     return QColor(color, color/2, color/4);
             }
         }
-        if (step == MAX_STEPS)
+        if (step == settings.max_step)
             return QColor(0, 0, 0);
         z = pow(z, settings.pow_deg) + c;
     }

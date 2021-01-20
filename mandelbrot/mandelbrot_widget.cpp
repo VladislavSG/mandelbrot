@@ -77,5 +77,5 @@ void mandelbrot_widget::rerender()
 void mandelbrot_widget::settingsUpdate(AllSettings const& settings)
 {
     manager.set_settings(settings);
-    rerender();
+    reset();
 }
