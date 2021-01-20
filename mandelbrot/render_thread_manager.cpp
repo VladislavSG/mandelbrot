@@ -2,6 +2,13 @@
 #include <complex>
 #include <iostream>
 
+static const int BLOCK_SIZE = 32;
+
+int rup_div(int a, int b)
+{
+    return (a+b-1)/b;
+}
+
 render_thread_manager::render_thread_manager()
 {}
 
@@ -23,46 +30,64 @@ void render_thread_manager::render(QPointF const& c, double const& sc, QSize con
     }
 }
 
+void render_thread_manager::set_settings(const AllSettings &set)
+{
+    std::unique_lock ul(mx);
+    need_cancel = true;
+    condition.wait(ul, [this](){return count_threads == 0;});
+    settings = set;
+}
+
 void render_thread_manager::run()
 {
     forever {
         int pc = QThread::idealThreadCount();
 
         std::unique_lock ul(mx);
-        int w = size.width();
-        int h = size.height();
+        QSize sz = size;
         QPointF c = center;
         double sc = scale;
-        count_running_threads += pc;
         ul.unlock();
 
-        QImage img(w, h, QImage::Format_RGB888);
-        unsigned char* data = img.bits();
-        qsizetype bpl = img.bytesPerLine();
-        int lpp = (h+pc-1)/pc;
+        for (int img_scale = BLOCK_SIZE; img_scale > 0; img_scale /= 2)
+        {
+            {
+                std::lock_guard lg(mx);
+                if (need_cancel)
+                    break;
+                else
+                    count_threads += pc;
+            }
+            QSize new_sz{rup_div(sz.width(), img_scale), rup_div(sz.height(), img_scale)};
+            double new_sc = sc * img_scale;
 
-        std::vector<std::thread> all_threads;
-        unsigned char* const data_start = data;
-        unsigned char* const data_end = data + bpl * h;
-        std::cout << data_start << " " << data_end << std::endl;
-        unsigned int i = 0;
-        unsigned int line = 0;
+            QImage img(new_sz, QImage::Format_RGB888);
+            unsigned char* data = img.bits();
+            qsizetype bpl = img.bytesPerLine(); // bytes per line
+            int lpt = rup_div(new_sz.height(), pc); // lines per thread
 
-        for (; i < h - pc*(lpp-1); ++i, data += lpp*bpl, line += lpp) {
-            all_threads.emplace_back([=, &w, &bpl, &c, &sc](){ do_work(data, line, line + lpp, w, bpl, c, sc); });
+            std::vector<std::thread> all_threads;
+            int i = 0;
+            unsigned int line = 0;
+
+            for (; i < new_sz.height() - pc*(lpt-1); ++i, data += lpt*bpl, line += lpt) {
+                all_threads.emplace_back([=, &new_sz, &bpl, &c, &new_sc](){ do_work(data, line, line + lpt, new_sz, bpl, c, new_sc); });
+            }
+            for (; i < pc; ++i, data += (lpt-1)*bpl, line += lpt-1) {
+                all_threads.emplace_back([=, &new_sz, &bpl, &c, &new_sc](){ do_work(data, line, line + lpt-1, new_sz, bpl, c, new_sc); });
+            }
+
+            for (auto& t : all_threads) {
+                t.join();
+            }
+
+            {
+                std::lock_guard lg(mx);
+                if (!need_cancel)
+                    emit render_thread_manager::image_rendered(img, img_scale);
+            }
         }
-        for (; i < pc; ++i, data += (lpp-1)*bpl, line += lpp-1) {
-            all_threads.emplace_back([=, &w, &bpl, &c, &sc](){ do_work(data, line, line + lpp-1, w, bpl, c, sc); });
-        }
-
-        for (auto& t : all_threads) {
-            t.join();
-        }
-
         ul.lock();
-        if (!need_cancel)
-            emit render_thread_manager::image_rendered(img);
-
         if (!need_cancel)
             condition.wait(ul);
         need_cancel = false;
@@ -70,7 +95,7 @@ void render_thread_manager::run()
     }
 }
 
-void render_thread_manager::do_work(unsigned char* data, int y1, int y2, int w, qsizetype bpl, QPointF center, double scale)
+void render_thread_manager::do_work(unsigned char* data, int y1, int y2, QSize s, qsizetype bpl, QPointF center, double scale)
 {
     for (int y = y1; y < y2; ++y)
     {
@@ -80,28 +105,36 @@ void render_thread_manager::do_work(unsigned char* data, int y1, int y2, int w, 
                 break;
         }
         unsigned char *p = data + (y-y1) * bpl;
-        for (int x = 0; x != w; ++x)
+        for (int x = 0; x != s.width(); ++x)
         {
-            set_color(p, value(QPoint(x, y), center, scale));
+            set_color(p, value(QPointF(x - s.width()/2, y - s.height()/2)*scale + center));
         }
     }
     std::lock_guard lg(mx);
-    --count_running_threads;
+    --count_threads;
 }
 
-QColor render_thread_manager::value(QPoint const& p, QPointF const& center, double scale) const
+QColor render_thread_manager::value(QPointF const& p)
 {
-    std::complex<double> c(p.x() - center.x(), p.y() - center.y());
-    c *= scale;
-    size_t const MAX_STEPS = 100;
+    std::complex<double> c(p.x(), p.y());
+    size_t const MAX_STEPS = 200;
     std::complex<double> z = 0;
     for (size_t step = 0;; ++step)
     {
         if (std::abs(z) >= 2.)
-            return QColor((step % 43)/ 42. * 256, 0, 0);
+        {
+            int color = (step % 43)*256/42;
+            switch (step/43 % 2)
+            {
+                case 0:
+                    return QColor(color/2, color, color/4);
+                case 1:
+                    return QColor(color, color/2, color/4);
+            }
+        }
         if (step == MAX_STEPS)
             return QColor(0, 0, 0);
-        z = z * z + c;
+        z = pow(z, settings.pow_deg) + c;
     }
 }
 
