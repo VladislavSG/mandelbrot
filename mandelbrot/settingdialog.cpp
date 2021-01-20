@@ -18,5 +18,5 @@ SettingDialog::~SettingDialog()
 void SettingDialog::collect_settings()
 {
     emit update_settings({ui->spinBox->value(),
-                          ui->horizontalSlider->value()});
+                          static_cast<size_t>(ui->horizontalSlider->value())});
 }

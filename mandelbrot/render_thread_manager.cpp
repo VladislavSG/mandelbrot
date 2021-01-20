@@ -34,7 +34,8 @@ void render_thread_manager::set_settings(const AllSettings &set)
 {
     std::unique_lock ul(mx);
     need_cancel = true;
-    no_threads.wait(ul, [this](){return count_threads == 0;});
+    if (count_threads != 0)
+        no_threads.wait(ul);
     settings = set;
 }
 
