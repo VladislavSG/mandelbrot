@@ -29,7 +29,8 @@ private:
 
     std::mutex mx;
     bool need_cancel;
-    std::condition_variable condition;
+    std::condition_variable has_job;
+    std::condition_variable no_threads;
     int count_threads = 0;
     QPointF center;
     double scale;

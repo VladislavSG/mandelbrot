@@ -26,7 +26,7 @@ void render_thread_manager::render(QPointF const& c, double const& sc, QSize con
         start();
     } else {
         need_cancel = true;
-        condition.notify_one();
+        has_job.notify_one();
     }
 }
 
@@ -34,7 +34,7 @@ void render_thread_manager::set_settings(const AllSettings &set)
 {
     std::unique_lock ul(mx);
     need_cancel = true;
-    condition.wait(ul, [this](){return count_threads == 0;});
+    no_threads.wait(ul, [this](){return count_threads == 0;});
     settings = set;
 }
 
@@ -89,7 +89,7 @@ void render_thread_manager::run()
         }
         ul.lock();
         if (!need_cancel)
-            condition.wait(ul);
+            has_job.wait(ul);
         need_cancel = false;
         ul.unlock();
     }
@@ -112,6 +112,8 @@ void render_thread_manager::do_work(unsigned char* data, int y1, int y2, QSize s
     }
     std::lock_guard lg(mx);
     --count_threads;
+    if (count_threads == 0)
+        no_threads.notify_one();
 }
 
 QColor render_thread_manager::value(QPointF const& p)
