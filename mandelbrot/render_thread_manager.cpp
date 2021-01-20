@@ -125,7 +125,7 @@ QColor render_thread_manager::value(QPointF const& p)
     {
         if (std::abs(z) >= 2.)
         {
-            int color = (step % 43)*256/42;
+            int color = (step % 43)*255/42;
             switch (step/43 % 2)
             {
                 case 0:
