@@ -23,11 +23,12 @@ public:
 //    void output_changed();
 
 private:
+    QImage img_buf;
     mutable std::mutex m;
     std::atomic<uint32_t> input_version;
     std::condition_variable input_changed;
     double scale = 0.005;
-    QPointF center{width()/2., height()/2.};
+    QPointF center;
     bool notify_output_quied;
     QPoint mousePos;
 

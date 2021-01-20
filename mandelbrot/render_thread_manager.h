@@ -20,7 +20,7 @@ signals:
     void image_rendered(QImage const& img);
 
 private:
-    void do_work(unsigned char* data, int y1, int y2, int w, qsizetype bpl);
+    void do_work(unsigned char* data, int y1, int y2, int w, qsizetype bpl, QPointF center, double scale);
     QColor value(QPoint const& p, QPointF const& center, double scale) const;
     void set_color(unsigned char*& p, QColor c);
     void cancel();
