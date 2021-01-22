@@ -19,15 +19,19 @@ render_thread_manager::~render_thread_manager()
 
 void render_thread_manager::render(QPointF const& c, double const& sc, QSize const& sz)
 {
-    std::lock_guard lg(mx);
+    std::unique_lock ul(mx);
+    if (count_threads != 0) {
+        need_cancel = true;
+        no_threads.wait(ul, [&](){return count_threads == 0;});
+    }
     center = c;
     scale = sc;
-    size = sz;
+    if (img.size() != sz)
+        img = QImage(sz, QImage::Format_RGB888);
 
     if (!isRunning()) {
         start();
     } else {
-        need_cancel = true;
         has_job.notify_one();
     }
 }
@@ -37,7 +41,7 @@ void render_thread_manager::set_settings(const AllSettings &set)
     std::unique_lock ul(mx);
     need_cancel = true;
     if (count_threads != 0)
-        no_threads.wait(ul);
+        no_threads.wait(ul, [&](){return count_threads == 0;});
     settings = set;
 }
 
@@ -49,7 +53,6 @@ void render_thread_manager::run()
         std::unique_lock ul(mx);
         QPointF c = center;
         double sc = scale;
-        QImage img(size, QImage::Format_RGB888);
         ul.unlock();
 
         for (int img_scale = BLOCK_SIZE; img_scale > 0; img_scale /= 2)

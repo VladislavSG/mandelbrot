@@ -45,7 +45,7 @@ private:
     int count_threads = 0;
     QPointF center;
     double scale;
-    QSize size;
+    QImage img;
     AllSettings settings;
 };
 
