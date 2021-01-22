@@ -32,6 +32,7 @@ void render_thread_manager::render(QPointF const& c, double const& sc, QSize con
     if (!isRunning()) {
         start();
     } else {
+        need_cancel = true;
         has_job.notify_one();
     }
 }
