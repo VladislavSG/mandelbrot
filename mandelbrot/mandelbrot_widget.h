@@ -36,7 +36,7 @@ private:
     render_thread_manager manager;
 
 private slots:
-    void redraw(QImage const&, unsigned int img_sc);
+    void redraw(QImage&, unsigned int img_sc);
 };
 
 #endif // MANDELBROT_WIDGET_H

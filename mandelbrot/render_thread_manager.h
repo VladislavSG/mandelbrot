@@ -19,10 +19,21 @@ public:
     void run() override;
 
 signals:
-    void image_rendered(QImage const& img, unsigned int img_sc);
+    void image_rendered(QImage& img, unsigned int img_sc);
 
 private:
-    void do_work(unsigned char* data, int y1, int y2, QSize s, qsizetype bpl, QPointF center, double scale);
+    struct task
+    {
+        unsigned char* data;
+        unsigned int y1;
+        unsigned int y2;
+        QSize const& size;
+        qsizetype const& bpl;
+        QPointF const& center;
+        double const& scale;
+    };
+
+    void do_work(task const& t);
     QColor value(QPointF const& p);
     void set_color(unsigned char*& p, QColor c);
     void cancel();

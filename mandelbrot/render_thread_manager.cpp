@@ -1,6 +1,8 @@
 #include "render_thread_manager.h"
 #include <complex>
 #include <iostream>
+#include <QFuture>
+#include <QtConcurrent/QtConcurrent>
 
 static const int BLOCK_SIZE = 32;
 
@@ -45,9 +47,9 @@ void render_thread_manager::run()
         int pc = QThread::idealThreadCount();
 
         std::unique_lock ul(mx);
-        QSize sz = size;
         QPointF c = center;
         double sc = scale;
+        QImage img(size, QImage::Format_RGB888);
         ul.unlock();
 
         for (int img_scale = BLOCK_SIZE; img_scale > 0; img_scale /= 2)
@@ -59,28 +61,27 @@ void render_thread_manager::run()
                 else
                     count_threads += pc;
             }
-            QSize new_sz{rup_div(sz.width(), img_scale), rup_div(sz.height(), img_scale)};
+            QSize new_sz{rup_div(img.width(), img_scale), rup_div(img.height(), img_scale)};
             double new_sc = sc * img_scale;
 
-            QImage img(new_sz, QImage::Format_RGB888);
             unsigned char* data = img.bits();
             qsizetype bpl = img.bytesPerLine(); // bytes per line
             int lpt = rup_div(new_sz.height(), pc); // lines per thread
 
-            std::vector<std::thread> all_threads;
             int i = 0;
             unsigned int line = 0;
 
+            QVector<task> tasks;
+
             for (; i < new_sz.height() - pc*(lpt-1); ++i, data += lpt*bpl, line += lpt) {
-                all_threads.emplace_back([=, &new_sz, &bpl, &c, &new_sc](){ do_work(data, line, line + lpt, new_sz, bpl, c, new_sc); });
+                tasks << task{data, line, line + lpt, new_sz, bpl, c, new_sc};
             }
             for (; i < pc; ++i, data += (lpt-1)*bpl, line += lpt-1) {
-                all_threads.emplace_back([=, &new_sz, &bpl, &c, &new_sc](){ do_work(data, line, line + lpt-1, new_sz, bpl, c, new_sc); });
+                tasks << task{data, line, line + lpt-1, new_sz, bpl, c, new_sc};
             }
 
-            for (auto& t : all_threads) {
-                t.join();
-            }
+            QFuture<void> future = QtConcurrent::map(tasks, std::bind(&render_thread_manager::do_work, this, std::placeholders::_1));
+            future.waitForFinished();
 
             {
                 std::lock_guard lg(mx);
@@ -96,19 +97,19 @@ void render_thread_manager::run()
     }
 }
 
-void render_thread_manager::do_work(unsigned char* data, int y1, int y2, QSize s, qsizetype bpl, QPointF center, double scale)
+void render_thread_manager::do_work(task const& t)
 {
-    for (int y = y1; y < y2; ++y)
+    for (unsigned int y = t.y1; y < t.y2; ++y)
     {
         {
             std::lock_guard lg(mx);
             if (need_cancel)
                 break;
         }
-        unsigned char *p = data + (y-y1) * bpl;
-        for (int x = 0; x != s.width(); ++x)
+        unsigned char *p = t.data + (y-t.y1) * t.bpl;
+        for (int x = 0; x != t.size.width(); ++x)
         {
-            set_color(p, value(QPointF(x - s.width()/2, y - s.height()/2)*scale + center));
+            set_color(p, value(QPointF(x - t.size.width()/2., y - t.size.height()/2.)*t.scale + t.center));
         }
     }
     std::lock_guard lg(mx);

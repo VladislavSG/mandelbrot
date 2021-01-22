@@ -22,14 +22,13 @@ void mandelbrot_widget::paintEvent(QPaintEvent* event)
     else
     {
         QPainter p(this);
-        p.scale(img_scale, img_scale);
-        p.drawImage(0, 0, img_buf);
+        p.drawImage(rect(), img_buf, QRect(QPoint(0, 0), size()/img_scale));
     }
 }
 
-void mandelbrot_widget::redraw(QImage const& img, unsigned int img_sc)
+void mandelbrot_widget::redraw(QImage& img, unsigned int img_sc)
 {
-    img_buf = img;
+    img_buf.swap(img);
     img_scale = img_sc;
     update();
 }
