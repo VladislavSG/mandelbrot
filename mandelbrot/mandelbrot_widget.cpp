@@ -44,14 +44,14 @@ void mandelbrot_widget::wheelEvent(QWheelEvent *event)
 void mandelbrot_widget::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton)
-        mousePos = event->position().toPoint();
+        mousePos = event->pos();
 }
 
 void mandelbrot_widget::mouseMoveEvent(QMouseEvent *event)
 {
     if (event->buttons() & Qt::LeftButton) {
-        center -= QPointF(event->position().toPoint() - mousePos)*scale;
-        mousePos = event->position().toPoint();
+        center -= QPointF(event->pos() - mousePos)*scale;
+        mousePos = event->pos();
         rerender();
     }
 }
